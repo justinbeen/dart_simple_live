@@ -1,0 +1,55 @@
+name: Build dart_simple_live APK
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch: # 手动触发编译（重点推荐，按需执行）
+
+jobs:
+  build-android-apk:
+    runs-on: ubuntu-latest # 安卓编译推荐用Ubuntu环境
+    steps:
+      # 1. 拉取仓库代码
+      - uses: actions/checkout@v4
+
+      # 2. 安装Flutter SDK（APK编译需要Flutter，而非纯Dart）
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: 'stable' # 使用稳定版Flutter
+          channel: 'stable'
+
+      # 3. 配置Flutter国内镜像（解决依赖下载慢/失败问题）
+      - name: Configure Flutter mirrors
+        run: |
+          flutter config --enable-android
+          echo "PUB_HOSTED_URL=https://pub.flutter-io.cn" >> $GITHUB_ENV
+          echo "FLUTTER_STORAGE_BASE_URL=https://storage.flutter-io.cn" >> $GITHUB_ENV
+
+      # 4. 安装项目依赖（兼容Flutter/Dart）
+      - name: Install dependencies
+        run: |
+          flutter pub get
+          # 预编译Flutter安卓工程
+          flutter precache --android
+
+      # 5. 构建Android APK（release版本，可直接安装）
+      - name: Build Android APK
+        run: |
+          flutter build apk --release --split-per-abi # 按CPU架构拆分APK（更小体积）
+          # 备用命令（不分架构的通用APK）：flutter build apk --release
+
+      # 6. 上传编译好的APK产物（方便下载）
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-apk-build
+          # 指向APK的实际生成路径（Flutter默认路径）
+          path: |
+            build/app/outputs/flutter-apk/app-armeabi-v7a-release.apk
+            build/app/outputs/flutter-apk/app-arm64-v8a-release.apk
+            build/app/outputs/flutter-apk/app-x86_64-release.apk
+            # 通用APK路径（如果用了不分架构的命令，加这行）：
+            # build/app/outputs/flutter-apk/app-release.apk
